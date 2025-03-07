@@ -5,23 +5,69 @@ format: pdf
 editor: visual
 ---
 
-## Quarto
-
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
-
-## Running Code
-
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
-
 ```{r}
-1 + 1
+library(vroom)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(tidyverse)
 ```
 
-You can add options to executable code like this
-
 ```{r}
-#| echo: false
-2 * 2
+
+
+movie <- vroom("TMDB_movie_dataset_v11.csv")
+
+
+cutoff_year <- 2000
+
+movie <- movie |>
+  filter(status == "Released",
+         vote_average > 0) |>
+  mutate(release_date = as.Date(release_date),
+         release_year = year(release_date),
+         movie_age = ifelse(release_year <= cutoff_year, "Old", "New"))
+
+
+
+movie$year_bin <- cut(movie$release_year,
+                      breaks = seq(floor(min(movie$release_year, na.rm = TRUE) / 10) * 10,
+                                   ceiling(max(movie$release_year, na.rm = TRUE) / 10) * 10, 
+                                   by = 10),
+                      right = FALSE,
+                      labels = paste0(seq(floor(min(movie$release_year, 
+                                                    na.rm = TRUE) / 10) * 10,
+                                          ceiling(max(movie$release_year, 
+                                                      na.rm = TRUE) / 10) * 10 - 10,
+                                          by = 10),
+                                      "s")) # Format labels as "1990s","2000s", etc.
+
+
+
+summary(movie)
+
 ```
 
-The `echo: false` option disables the printing of code (only output is displayed).
+```{r}
+ggplot(movie, aes(x = release_year)) +
+  geom_histogram(binwidth = 5, fill ="blue", color ='black') +
+  labs(title ="Distribution of Movie Release Years", x = 'Year', y = 'count')
+
+
+```
+
+```{r}
+# Now you can plot the distribution of ratings
+ggplot(movie, aes(x = vote_average)) +
+  geom_histogram(binwidth = 1, fill ="blue", color = 'black') +
+  labs(title ="Distribution of Movie Ratings", x ="Rating", y ="Count")
+```
+
+```{r}
+cat(quantile(movie$release_year, 0.3, na.rm = TRUE))
+```
+
+```{r}
+cat(ecdf(movie$release_year)(2000))
+cat(table(movie$year_bin))
+```
