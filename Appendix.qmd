@@ -1,0 +1,205 @@
+---
+title: "Appendix"
+author: "Chris Gordon, Spencer Hamilton, & Dan Sumsion"
+format: pdf
+editor: visual
+---
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide", fig.show="hide"}
+library(vroom)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+source("gibbs_sampler_2025.R")
+
+set.seed(12345)
+```
+
+## Read in Data and Create Cutoff Year Variable
+
+```{r}
+movie <- vroom("TMDB_movie_dataset_v11.csv")
+
+cutoff_year <- 2000
+
+movie <- movie %>%
+  filter(status == "Released",
+         !is.na(vote_average),
+         vote_average > 0) %>%
+  mutate(release_date = as.Date(release_date),
+         release_year = year(release_date),
+         movie_age = ifelse(release_year <= cutoff_year, "Old", "New")) %>%
+  dplyr::select(title, movie_age, release_date, release_year, vote_average)
+
+movie <- movie %>%
+  filter(!is.na(release_year), !is.na(vote_average))
+```
+
+## EDA/Summaries:
+
+```{r}
+summary(movie)
+
+movie %>%
+  group_by(movie_age) %>%
+  summarise(
+    mean_rating = mean(vote_average),
+    sd_rating = sd(vote_average),
+    count = n()
+  )
+```
+
+### Graph 1:
+
+```{r}
+ggplot(movie, aes(x = release_year)) +
+  geom_histogram(binwidth = 5, fill ="blue", color ='black') +
+  labs(title ="Graph 1: Distribution of Movies Release Years", x = 'Release Year', y = 'Count')
+```
+
+### Graph 2:
+
+```{r}
+ggplot(movie, aes(x = release_year > 2000, y = vote_average, fill = release_year > 2000)) +
+  geom_boxplot() +
+  scale_x_discrete(labels = c("Before or in 2000", "After 2000")) +
+  scale_fill_manual(values = c("FALSE" = "red", "TRUE" = "blue"), 
+                    labels = c("Before or in 2000", "After 2000"),
+                    name = "Release Year") +
+  labs(title = "Graph 2: Movie Ratings by Release Year",
+       x = "Release Year", y = "Rating")
+```
+
+## Posterior Inference:
+
+### Old Movies:
+
+```{r}
+# Data for Old movies
+old_m <- na.omit(movie[movie$movie_age == "Old", ]$vote_average)
+
+# Create priors:
+# Mu ~ N(5,1)
+# sig2 ~ IG(1,1)
+# non-grandma prior
+mu_old_prior <- rnorm(10000, mean = 5, sd = 1)
+sigma2_old_prior <- 1 / rgamma(1000, shape = 3, rate = 2.5)
+
+# Gibbs Sampler for posterior
+old_m_post <- gibbs.sampler(data = old_m, m = 5, v = 1, a = 3, b = 2.5, 
+                       nsamp = 10000, nburn = 100, nthin = 1)
+
+# Extract Posterior mu and sigma2 into objects
+mu_old_post <- old_m_post[,1]
+sigma2_old_post <- old_m_post[,2]
+
+# Ensure good mixing and convergence for mu and sigma2
+plot(mu_old_post, type='l', main = 'Graph 3: Trace Plot for mu_old',
+     ylab = 'Value of mu_old') # looks good
+plot(sigma2_old_post, type='l', main = 'Graph 4: Trace Plot for sigma2_old',
+     ylab = 'Value of sigma2_old') # looks good
+
+# Ensure no correlation for mu and sigma2
+acf(mu_old_post, main = 'Graph 5: Autocorrelation Plot for mu_old') # looks good
+acf(sigma2_old_post, main = 'Graph 6: Autocorrelation Plot for sigma2_old') # looks good
+
+
+# Plot mu_old Prior and Posterior
+plot(density(mu_old_prior, adjust = 2), col='red', 
+     xlab='Value of mu_old', ylab="Density",
+     main="Graph 7: Prior and Posterior Dist for mu_old")
+lines(density(mu_old_post), col='blue')
+legend(x="topleft", legend=c("Prior", "Postierior"), col=c("red","blue"), lty=1)
+
+# Plot sigma2_old Prior and Posterior
+plot(density(sigma2_old_prior, adjust = 2), col='red', 
+     xlab='Value of sigma2_old', ylab="Density",
+     main="Graph 8: Prior and Posterior Dist for sigma2_old", xlim=c(0,6))
+lines(density(sigma2_old_post), col='blue')
+legend(x="topright", legend=c("Prior","Posterior"), col=c("red","blue"), lty=1)
+```
+
+### New Movies:
+
+```{r}
+# Data for New movies
+new_m <- na.omit(movie[movie$movie_age == "New", ]$vote_average)
+
+# Create priors:
+# Mu ~ N(5,1)
+# sig2 ~ IG(1,1)
+# non-grandma prior
+mu_new_prior <- rnorm(10000, mean = 5, sd = 1)
+sigma2_new_prior <- 1 / rgamma(1000, shape = 3, rate = 2.5)
+
+# Gibbs Sampler for posterior
+new_m_post <- gibbs.sampler(data = new_m, m = 5, v = 1, a = 3, b = 2.5, 
+                       nsamp = 10000, nburn = 100, nthin = 1)
+
+# Extract Posterior mu and sigma2 into objects
+mu_new_post <- new_m_post[,1]
+sigma2_new_post <- new_m_post[,2]
+
+# Ensure good mixing and convergence for mu and sigma2
+plot(mu_new_post, type='l', main = 'Graph 9: Trace Plot for mu_new',
+     ylab = 'Value of mu_new') # looks good
+plot(sigma2_new_post, type='l', main = 'Graph 10: Trace Plot for sigma2_new',
+     ylab = 'Value of sigma2_new') # looks good
+
+# Ensure no correlation for mu and sigma2
+acf(mu_new_post, main = 'Graph 11: Autocorrelation Plot for mu_new') # looks good
+acf(sigma2_new_post, main = 'Graph 12: Autocorrelation Plot for sigma2_new') # looks good
+
+
+# Plot mu_old Prior and Posterior
+plot(density(mu_new_prior, adjust = 2), col='red', 
+     xlab='Value of mu_new', ylab="Density",
+     main="Graph 13: Prior and Posterior Dist for mu_new")
+lines(density(mu_new_post), col='blue')
+legend(x="topleft", legend=c("Prior", "Postierior"), col=c("red","blue"), lty=1)
+
+# Plot sigma2_old Prior and Posterior
+plot(density(sigma2_new_prior, adjust = 2), col='red', 
+     xlab='Value of sigma2_new', ylab="Density",
+     main="Graph 14: Prior and Posterior Dist for sigma2_new", xlim=c(0,6))
+lines(density(sigma2_new_post), col='blue')
+legend(x="topright", legend=c("Prior","Posterior"), col=c("red","blue"), lty=1)
+```
+
+### Comparison of Differences for mu_new - mu_old:
+
+```{r}
+# Subtract the posteriors and priors to obtain difference: mu_new - mu_old
+diff_prior <- mu_new_prior - mu_old_prior
+diff_post <- mu_new_post - mu_old_post
+
+# Calculate 95% Credible Interval of Posterior for mu_new - mu_old
+quantile(diff_post, c(.025,.975))
+
+# Plot Prior and posteriors for mu_new - mu_old
+plot(density(diff_prior, adjust = 2), col='red', 
+     xlab='Value of mu_new - mu_old', ylab="Density",
+     main="Graph 15: Prior and Posterior Difference for mu_new - mu_old")
+lines(density(diff_post, adjust = 2), col ='blue')
+legend(x="topright", legend=c("Prior","Posterior"), col=c("red","blue"), lty=1)
+```
+
+### Comparison of Ratio sigma2_new/sigma2_old:
+
+```{r}
+# Compute ratio posterior and prior for sigma2_new/sigma2_old
+ratio_prior <- sigma2_new_prior/sigma2_old_prior
+ratio_post <- sigma2_new_post/sigma2_old_post
+
+# Compute 95% Posterior Credible Interval for sigma2_new/sigma2_old
+quantile(ratio_post, c(.025,.975))
+
+# Plot Prior and posteriors for sigma2_new/sigma2_old
+plot(density(ratio_prior, adjust = 2), col='red', 
+     xlab='Value of sigma2_new/sigma2_old', ylab="Density",
+     main="Graph 16: Prior and Posterior for sigma2_new/sigma2_old")
+lines(density(ratio_post, adjust = 2), col ='blue')
+legend(x="topright", legend=c("Prior","Posterior"), col=c("red","blue"), lty=1)
+```

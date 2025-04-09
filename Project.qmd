@@ -19,8 +19,6 @@ FROM the rubric things that we need:
 Provide a brief summary of the data by reporting summary statistics and an appropriate figure.
 
 ```{r}
-
-
 movie <- vroom("TMDB_movie_dataset_v11.csv")
 
 
@@ -59,11 +57,40 @@ length(movie$runtime)
 ```
 
 ```{r}
+movie <- movie %>%
+  filter(!is.na(release_year), !is.na(vote_average)) %>%
+  mutate(after_2000 = release_year > 2000)
+
 ggplot(movie, aes(x = release_year)) +
   geom_histogram(binwidth = 5, fill ="blue", color ='black') +
   labs(title ="Distribution of Movie Release Years", x = 'Year', y = 'count')
 
 
+ggplot(movie, aes(x = vote_average, fill = release_year > 2000)) +
+  geom_histogram(binwidth = 1, color = 'black', position = 'identity', alpha = 0.6) +
+  scale_fill_manual(values = c("TRUE" = "blue", "FALSE" = "red"),
+                    labels = c("Before or in 2000", "After 2000"),
+                    name = "Release Year") +
+  labs(title = "Distribution of Movie Ratings by Release Year",
+       x = "Rating", y = "Count")
+
+ggplot(movie, aes(x = release_year > 2000, y = vote_average, fill = release_year > 2000)) +
+  geom_boxplot() +
+  scale_x_discrete(labels = c("Before or in 2000", "After 2000")) +
+  scale_fill_manual(values = c("FALSE" = "red", "TRUE" = "blue"), 
+                    labels = c("Before or in 2000", "After 2000"),
+                    name = "Release Year") +
+  labs(title = "Movie Ratings by Release Year",
+       x = "Release Year", y = "Rating")
+
+
+movie %>%
+  group_by(movie_age) %>%
+  summarise(
+    mean_rating = mean(vote_average),
+    sd_rating = sd(vote_average),
+    count = n()
+  )
 ```
 
 ```{r}
@@ -86,7 +113,7 @@ Now that we know more about the data, here is the bayesian stuff: Perform poster
 ```{r}
 o_m <- na.omit(movie[movie$movie_age == "Old", ]$vote_average)
 
-post3 <- gibbs.sampler(data = o_m,m = 5,v = 1,a = 2,b = .5,nsamp = 10000,nburn = 100,nthin = 1)
+post3 <- gibbs.sampler(data = o_m,m = 5,v = 1,a = 3,b = 2.5,nsamp = 10000,nburn = 100,nthin = 1)
 ```
 
 ```{r}
@@ -100,7 +127,6 @@ acf(na.omit(mu_post_r))
 acf(na.omit(sigma2_post_r))
 ```
 
-
 compare prior to posterior
 
 ```{r}
@@ -112,17 +138,17 @@ compare prior to posterior
 mu_prior_r <- rnorm(10000, mean = 5, sd = 1)
 
 # Prior for the variance (sigma^2), inverse gamma distribution
-variance_prior <- 1 / rgamma(1000, shape = 2, rate = 0.5)
+variance_prior <- 1 / rgamma(1000, shape = 3, rate = 2.5)
 
 
 
 
 
 
-plot(density(mu_prior_r), col='red', 
+plot(density(mu_prior_r, adjust = 2), col='blue', 
      xlab=expression(mu), ylab="posterior density",
      main="")
-lines(density(mu_post_r), col='blue')
+lines(density(mu_post_r), col='red')
 legend(x="topleft", legend=c("Postierior mean","Prior mean"), col=c("red","blue"), lty=1)
 ```
 
@@ -130,22 +156,22 @@ And the same for the prior for the variances
 
 ```{r}
 # Prior for the variance (sigma^2), inverse gamma distribution
-variance_prior <- 1 / rgamma(1000, shape = 2, rate = 0.5)
+variance_prior <- 1 / rgamma(1000, shape = 3, rate = 2.5)
 
 
 
 
 
 
-plot(density(variance_prior), col='red', 
+plot(density(variance_prior, adjust = 2), col='red', 
      xlab=expression(sigma2), ylab="prior density",
      main="", xlim=c(0,6))
 lines(density(sigma2_post_r), col='blue')
-legend(x="topleft", legend=c("Prior variance","Posterior variance"), col=c("red","blue"), lty=1)
+legend(x="topright", legend=c("Prior variance","Posterior variance"), col=c("red","blue"), lty=1)
 ```
 
-
 credibility interval
+
 ```{r}
 quantile(mu_post_r, c(.025,.975))
 ```
@@ -157,21 +183,12 @@ pred_n <- rnorm(1000, mean=mu_post_r, sd=sqrt(sigma2_post_r))
 quantile(pred_n, c(.025,.975))
 ```
 
-
-
-
-
-
-
-
-
-
 now for the new movies
 
 ```{r}
 n_m <- na.omit(movie[movie$movie_age == "New", ]$vote_average)
 
-post_n <- gibbs.sampler(data = n_m,m = 5,v = 1,a = 2,b = .5,nsamp = 10000,nburn = 100,nthin = 1)
+post_n <- gibbs.sampler(data = n_m,m = 5,v = 1,a = 3,b = 2.5,nsamp = 10000,nburn = 100,nthin = 1)
 ```
 
 ```{r}
@@ -189,10 +206,6 @@ acf(na.omit(sigma2_post_n))
 
 ```
 
-
-
-
-
 compare prior to posterior
 
 ```{r}
@@ -204,7 +217,7 @@ compare prior to posterior
 mu_prior_r <- rnorm(10000, mean = 5, sd = 1)
 
 # Prior for the variance (sigma^2), inverse gamma distribution
-variance_prior <- 1 / rgamma(1000, shape = 2, rate = 0.5)
+variance_prior <- 1 / rgamma(1000, shape = 3, rate = 2.5)
 
 
 
@@ -222,19 +235,20 @@ And the same for the prior for the variances
 
 ```{r}
 # Prior for the variance (sigma^2), inverse gamma distribution
-variance_prior <- 1 / rgamma(1000, shape = 2, rate = 0.5)
+variance_prior <- 1 / rgamma(1000, shape = 3, rate = 2.5)
 
 
 
 
 
 
-plot(density(variance_prior), col='red', 
+plot(density(variance_prior, adjust = 2), col='red', 
      xlab=expression(sigma2), ylab="prior density",
      main="", xlim=c(0,6))
 lines(density(sigma2_post_n), col='blue')
-legend(x="topleft", legend=c("Prior variance","Posterior variance"), col=c("red","blue"), lty=1)
+legend(x="topright", legend=c("Prior variance","Posterior variance"), col=c("red","blue"), lty=1)
 ```
+
 credible interval
 
 ```{r}
@@ -249,11 +263,6 @@ predictive interval
 pred_r <- rnorm(1000, mean=mu_post_n, sd=sqrt(sigma2_post_n))
 quantile(pred_r, c(.025,.975))
 ```
-
-
-
-
-
 
 now I need to chart them together, and subtract to get the 95 credible interval
 
@@ -282,10 +291,10 @@ First the means
 ```{r}
 diff <- mu_post_n - mu_post_r
 quantile(diff, c(.025,.975))
-plot(density(diff), col='red', 
+plot(density(diff, adjust = 2), col='red', 
      xlab=expression(mu), ylab="posterior density difference",
      main="")
-legend(x="topleft", legend=c("Postierior mean difference"), col=c("red"), lty=1)
+legend(x="topright", legend=c("Postierior mean difference"), col=c("red"), lty=1)
 ```
 
 Then the variances
@@ -294,9 +303,9 @@ Then the variances
 ratioed <- sigma2_post_n/sigma2_post_r
 quantile(ratioed, c(.025,.975))
 plot(density(ratioed), col='red', 
-     xlab=expression(mu), ylab="posterior density difference",
+     xlab=expression(mu), ylab="posterior density ratio",
      main="")
-legend(x="topleft", legend=c("Postierior mean difference"), col=c("red"), lty=1)
+legend(x="topleft", legend=c("Postierior variance diff"), col=c("red"), lty=1)
 ```
 
 This is remarkable, that the variances are clearly different. It seems that older movies have less variance, so they might be more consistent than newer movies.
